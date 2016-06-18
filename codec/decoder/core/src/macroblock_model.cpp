@@ -207,7 +207,6 @@ MacroblockModel::SingleCoefNeighbors MacroblockModel::priorCoef(int index8x8, in
         coloroffset = w * h * 16;
     }
     
-/*
     int rasterdelta = block_size == 64 ? 2 : 1;
     if (ix > 0) {
         int full_index = (rasterTo8x8Order[index - rasterdelta]) * 16 + coef + coloroffset;
@@ -221,7 +220,7 @@ MacroblockModel::SingleCoefNeighbors MacroblockModel::priorCoef(int index8x8, in
         const DecodedMacroblock *left = n[LEFT];
         if (left) {
             retval.has_left = true;
-            int full_index = (rasterTo8x8Order[index + w - raster_delta]) * 16 + coef + coloroffset;
+            int full_index = (rasterTo8x8Order[index + w - rasterdelta]) * 16 + coef + coloroffset;
             if (color) {
                 retval.left = left->odata.chromaAC[full_index];
             } else {
@@ -230,7 +229,7 @@ MacroblockModel::SingleCoefNeighbors MacroblockModel::priorCoef(int index8x8, in
         }
     }
     if (iy > 0) {
-        int full_index = (rasterTo8x8Order[index - w * raster_delta]) * 16 + coef + coloroffset;
+        int full_index = (rasterTo8x8Order[index - w * rasterdelta]) * 16 + coef + coloroffset;
         if (color) {
             retval.above = mb->odata.chromaAC[full_index];
         }else {
@@ -240,14 +239,14 @@ MacroblockModel::SingleCoefNeighbors MacroblockModel::priorCoef(int index8x8, in
     } else {
         const DecodedMacroblock *above = n[ABOVE];
         if (above) {
-            int full_index = (rasterTo8x8Order[index + w * (h - raster_delta) * raster_delta]) * 16 + coef + coloroffset;
+            int full_index = (rasterTo8x8Order[index + w * (h - rasterdelta) * rasterdelta]) * 16 + coef + coloroffset;
             if (color) {
                 retval.above = above->odata.chromaAC[full_index];
             } else {
                 retval.above = above->odata.lumaAC[full_index];
             }
         }
-        }*/
+    }
 
     const DecodedMacroblock *past = n[PAST];
     if (past) {
@@ -799,7 +798,6 @@ int32_t DecodedMacroblock::getiResidualProperty(uint32_t uiMbType, bool dc, int 
 
 const bool MacroblockModel::isPastCorrespondingACNonzero(int index, int coef, int color) {
   if (n[Nei::PAST]) {
-    int nonzero_past = 0;
     const int16_t* last;
     switch (color) {
     case 0: last = n[Nei::PAST]->odata.lumaAC + (index * 16); break;
