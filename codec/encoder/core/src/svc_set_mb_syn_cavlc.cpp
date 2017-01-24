@@ -70,6 +70,7 @@ void WelsSpatialWriteMbPred (sWelsEncCtx* pEncCtx, SSlice* pSlice, SMB* pCurMb) 
   SMVUnitXY sMvd[2];
   bool* pPredFlag;
   int8_t* pRemMode;
+  const int kiNumPredModes = uiMbType == MB_TYPE_INTRA4x4 ? 16 : 4;
 
   int32_t iMbOffset = 0;
 
@@ -86,8 +87,13 @@ void WelsSpatialWriteMbPred (sWelsEncCtx* pEncCtx, SSlice* pSlice, SMB* pCurMb) 
 
   switch (uiMbType) {
   case MB_TYPE_INTRA4x4:
+  case MB_TYPE_INTRA8x8:
     /* mb type */
     BsWriteUE (pBs, iMbOffset + 0);
+    if (pEncCtx->pCurDqLayer->sLayerInfo.pPpsP->bTransform8x8ModeFlag) {
+      //transform_size_8x8_flag
+      BsWriteOneBit (pBs, IS_INTRA8x8(uiMbType));
+    }
 
     /* prediction: luma */
     pPredFlag = &pMbCache->pPrevIntra4x4PredModeFlag[0];
@@ -102,7 +108,7 @@ void WelsSpatialWriteMbPred (sWelsEncCtx* pEncCtx, SSlice* pSlice, SMB* pCurMb) 
       pPredFlag++;
       pRemMode++;
       ++ i;
-    } while (i < 16);
+    } while (i < kiNumPredModes);
 
     /* prediction: chroma */
     BsWriteUE (pBs, g_kiMapModeIntraChroma[pMbCache->uiChmaI8x8Mode]);
@@ -280,11 +286,17 @@ int32_t WelsSpatialWriteMbSyn (sWelsEncCtx* pEncCtx, SSlice* pSlice, SMB* pCurMb
       WelsSpatialWriteMbPred (pEncCtx, pSlice, pCurMb);
     }
 
-    /* Step 2: write coded block patern */
-    if (IS_INTRA4x4 (pCurMb->uiMbType)) {
+    /* Step 2: write coded block patern and transform 8x8 for inter */
+    if (IS_INTRANxN (pCurMb->uiMbType)) {
       BsWriteUE (pBs, g_kuiIntra4x4CbpMap[pCurMb->uiCbp]);
     } else if (!IS_INTRA16x16 (pCurMb->uiMbType)) {
       BsWriteUE (pBs, g_kuiInterCbpMap[pCurMb->uiCbp]);
+    }
+
+    if (pCurMb->iTransformSize8x8Flag != 0 &&
+        pEncCtx->pCurDqLayer->sLayerInfo.pPpsP->bTransform8x8ModeFlag) {
+      //transform_size_8x8_flag
+      BsWriteOneBit (pBs, pCurMb->iTransformSize8x8Flag == 2);
     }
 
     /* Step 3: write QP and residual */
@@ -338,6 +350,10 @@ int32_t WelsUtilWriteMbResidual (SWelsFuncPtrList* pFuncList, uint32_t uiMbType,
     if (kiCbpLuma) {
       pBlock = iLumaBlock;
 
+      /* For 8x8 Blocks, it is expected that the caller perform 8x8 zigzag
+         and split the data into 4 interleaved blocks of 16, such that the same
+         4x4 code can be used.
+      */
       for (i = 0; i < 16; i += 4) {
         if (kiCbpLuma & (1 << (i >> 2))) {
           int32_t iIdx = g_kuiCache48CountScan4Idx[i];

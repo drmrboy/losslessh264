@@ -5,11 +5,11 @@
 #include <string>
 #include <vector>
 #include <map>
-#include "bitreader.h"
-#include "bitwriter.h"
 
 #include <assert.h>
 #include "array_nd.h"
+#include "bitreader.h"
+#include "bitwriter.h"
 
 //#define CONTEXT_DIFF
 
@@ -57,7 +57,10 @@ struct BitStream {
     void emitBit(uint32_t bit) {
       emitBits(bit, 1);
     }
-    void padToByte();
+    unsigned int padRemainder() const {
+        return 0x7 - (nBits & 0x7);
+    }
+    void padToByte(int val=0);
     std::pair<uint32_t, H264Error> scanBits(uint32_t nBits);
     void pop();
     uint32_t len() const;
@@ -344,7 +347,6 @@ inline std::pair<uint32_t, H264Error> ArithmeticCodedInput::scanBits(Branch<nBit
     bool res = scanBit(priors.getProb());
     return scanBits<nBits - 1>(priors.selectBranch(res));
 }
-
 class ArithmeticCodedOutput {
 public:
     std::vector<uint8_t> buffer;
@@ -483,7 +485,7 @@ template <>
 inline void ArithmeticCodedOutput::emitBits(uint32_t data, Branch<1> priors) {
     emitBit(!!data, priors.getProb());
 }
-
+extern int pipBillTag;
 class MacroblockModel;
 
 struct CompressionStream {
@@ -506,6 +508,10 @@ struct CompressionStream {
         return defaultStream;
     }
     ArithmeticCodedOutput&tag(int32_t tag) {
+        pipBillTag = tag;
+#ifdef DEBUG_ARICODER
+        fprintf(stderr, "%d) tag %d\n", w_bitcount, tag);
+#endif
         if (taggedStreams.find(tag) == taggedStreams.end()) {
             taggedStreams[tag].init(tag);
         }

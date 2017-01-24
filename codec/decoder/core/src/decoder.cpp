@@ -714,9 +714,10 @@ int32_t WelsDecodeBs (PWelsDecoderContext pCtx, const uint8_t* kpBsBuf, const in
           oMovie().def().escape00xWith003x();
           pNalPayload = ParseNalHeader (pCtx, &pCtx->sCurNalHead, pDstNal, iDstIdx, pSrcNal - 3, iSrcIdx + 3, &iConsumedBytes);
           // note that iBytesConsumed and pNalPayload are only valid for IS_PARAM_SET_NALS NonVclNal header: otherwise it reads way more
-          oMovie().def().appendBytes(pDstNal, pNalPayload - pDstNal);
           if (pNalPayload) { //parse correct
-            if (IS_PARAM_SETS_NALS (pCtx->sCurNalHead.eNalUnitType)) {
+            oMovie().def().appendBytes(pDstNal, pNalPayload - pDstNal);
+            if (pCtx->sCurNalHead.eNalUnitType == NAL_UNIT_SEI ||
+                IS_PARAM_SETS_NALS (pCtx->sCurNalHead.eNalUnitType)) {
               iRet = ParseNonVclNal (pCtx, pNalPayload, iDstIdx - iConsumedBytes, pSrcNal - 3, iSrcIdx + 3);
             }
             CheckAndFinishLastPic (pCtx, ppDst, pDstBufInfo);
@@ -726,13 +727,10 @@ int32_t WelsDecodeBs (PWelsDecoderContext pCtx, const uint8_t* kpBsBuf, const in
           }
           //oMovie().def().appendBytes(pNalPayload, iDstIdx - iConsumedBytes); // fixme <-- want to get this roundtripping
           DecodeFinishUpdate (pCtx);
-          if (oMovie().isRecoding) {
+          if (oMovie().isRecoding && !pCtx->pCurDqLayer->sLayerInfo.pPps->bEntropyCodingModeFlag) {
               oMovie().def().emitBit(1); // only emit stop bit
           }
           outputTrailingNalZeros(pDstNal, iDstIdx); // these were ignored from the header and added to consume bytes for no good reason
-          if (!oMovie().isRecoding) {
-              //flushPBitString(pCtx);
-          }
           oMovie().def().stopEscape();
           if ((dsOutOfMemory | dsNoParamSets) & pCtx->iErrorCode) {
 #ifdef LONG_TERM_REF
@@ -788,7 +786,8 @@ int32_t WelsDecodeBs (PWelsDecoderContext pCtx, const uint8_t* kpBsBuf, const in
     pNalPayload = ParseNalHeader (pCtx, &pCtx->sCurNalHead, pDstNal, iDstIdx, pSrcNal - 3, iSrcIdx + 3, &iConsumedBytes);
     // note that iBytesConsumed and pNalPayload are only valid for IS_PARAM_SET_NALS NonVclNal header: otherwise it reads way more
     if (pNalPayload) { //parse correct
-      if (IS_PARAM_SETS_NALS (pCtx->sCurNalHead.eNalUnitType)) {
+      if (pCtx->sCurNalHead.eNalUnitType == NAL_UNIT_SEI ||
+          IS_PARAM_SETS_NALS (pCtx->sCurNalHead.eNalUnitType)) {
         iRet = ParseNonVclNal (pCtx, pNalPayload, iDstIdx - iConsumedBytes, pSrcNal - 3, iSrcIdx + 3);
       }
       CheckAndFinishLastPic (pCtx, ppDst, pDstBufInfo);
@@ -836,10 +835,13 @@ int32_t WelsDecodeBs (PWelsDecoderContext pCtx, const uint8_t* kpBsBuf, const in
     }
     DecodeFinishUpdate (pCtx);
     if (oMovie().isRecoding) {
-        oMovie().def().emitBit(1); // only emit stop bit
+        if (!pCtx->pCurDqLayer->sLayerInfo.pPps->bEntropyCodingModeFlag) {
+            oMovie().def().emitBit(1); // only emit stop bit
+        }
     } else {
-        //flushPBitString(pCtx);
-        oMovie().def().emitBit(1); // only emit stop bit
+        if (!pCtx->pCurDqLayer->sLayerInfo.pPps->bEntropyCodingModeFlag) {
+            oMovie().def().emitBit(1); // only emit stop bit
+        }
     }
     oMovie().def().stopEscape();
 

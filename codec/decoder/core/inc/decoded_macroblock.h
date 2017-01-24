@@ -10,9 +10,8 @@ struct DecodedMacroblock {
     bool initialized;
   } odata;
   uint8_t eSliceType;
+  uint8_t pTransformSize8x8Flag;
   int uiChromaQpIndexOffset;
-  int32_t iPrevIntra4x4PredMode[16]; // deprecated, not read
-  int32_t iRemIntra4x4PredMode[16]; // deprecated, not read
   int32_t iBestIntra4x4PredMode[16];
   int16_t sMbMvp[16][2];
   int16_t sMbAbsoluteMv[16][2]; // absolute motion vectors. no need to serialized them
@@ -64,13 +63,40 @@ struct DecodedMacroblock {
   void preInit(const WelsDec::PSlice);
 
   const int16_t* getAC(int color, int subblockIndex = 0) const {
+    assert((color == 0 && subblockIndex < 16 && subblockIndex >= 0) ||
+            (color == 1 && subblockIndex < 4 && subblockIndex >= 0) ||
+            (color == 2 && subblockIndex < 8 && subblockIndex >= 4));
     return &(color == 0 ? odata.lumaAC : odata.chromaAC)[16 * subblockIndex];
+  }
+  bool needParseTransformSize8x8(WelsDec::PPps pPps) {
+    int pNoSubMbPartSizeLessThan8x8Flag = 1;
+    if (uiMbType == MB_TYPE_8x8 || uiMbType == MB_TYPE_8x8_REF0) {
+      for (int i = 0; i < 4; i++) {
+        pNoSubMbPartSizeLessThan8x8Flag &= (uiSubMbType[i] == SUB_MB_TYPE_8x8);
+      }
+    }
+    return (((uiMbType >= MB_TYPE_16x16 && uiMbType <= MB_TYPE_8x16)
+      || pNoSubMbPartSizeLessThan8x8Flag)
+     && (IS_INTER(uiMbType))
+     && (uiCbpL > 0)
+     // && (uiMbType != B_Direct_16x16 || direct_8x8_inference_flag)
+     && (pPps->bTransform8x8ModeFlag));
   }
 
   int countSubblockNonzeros(int color, int subblockIndex) const {
     const int16_t* ac = getAC(color, subblockIndex);
     int nonzeros = 0;
     for (int i = 0; i < 16; i++) {
+      if (ac[i] != 0) nonzeros++;
+    }
+    return nonzeros;
+  }
+  int countSubblockNonzeros8x8(int color, int subblockIndex) const {
+    assert(color == 0);
+    assert((subblockIndex & 3) == 0); // make sure we're an actual 8x8 block
+    const int16_t* ac = getAC(color, subblockIndex);
+    int nonzeros = 0;
+    for (int i = 0; i < 64; i++) {
       if (ac[i] != 0) nonzeros++;
     }
     return nonzeros;
